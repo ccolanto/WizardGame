@@ -1,0 +1,218 @@
+/* =============================================================================
+   Wizard Card Game - Custom Styles
+   ============================================================================= */
+
+/* General layout improvements */
+.stApp {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+/* Card container styling */
+.card-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* Individual card styling */
+.playing-card {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    padding: 15px 10px;
+    min-width: 70px;
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+
+.playing-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+.playing-card.red {
+    color: #e74c3c;
+}
+
+.playing-card.black {
+    color: #2c3e50;
+}
+
+.playing-card.wizard {
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: white;
+}
+
+.playing-card.jester {
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+    color: white;
+}
+
+.playing-card.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.playing-card.disabled:hover {
+    transform: none;
+}
+
+/* Trump card display */
+.trump-card {
+    border: 3px solid gold;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+}
+
+/* Player info cards */
+.player-card {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 15px;
+    margin: 10px 0;
+}
+
+.player-card.current-turn {
+    border: 2px solid #f1c40f;
+    background: rgba(241, 196, 15, 0.1);
+}
+
+.player-card.you {
+    border: 2px solid #3498db;
+}
+
+/* Game info panel */
+.game-info {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+/* Scoreboard styling */
+.scoreboard {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 15px;
+}
+
+.scoreboard-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.scoreboard-row:last-child {
+    border-bottom: none;
+}
+
+/* Phase indicators */
+.phase-badge {
+    display: inline-block;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 12px;
+}
+
+.phase-badge.bidding {
+    background: #e67e22;
+    color: white;
+}
+
+.phase-badge.playing {
+    background: #27ae60;
+    color: white;
+}
+
+.phase-badge.waiting {
+    background: #3498db;
+    color: white;
+}
+
+/* Trick area */
+.trick-area {
+    background: rgba(39, 174, 96, 0.2);
+    border: 2px solid rgba(39, 174, 96, 0.5);
+    border-radius: 50%;
+    width: 300px;
+    height: 300px;
+    margin: 20px auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Button improvements */
+.stButton > button {
+    border-radius: 25px;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+.stButton > button:hover {
+    transform: scale(1.05);
+}
+
+/* Winner animation */
+@keyframes winner-glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(241, 196, 15, 0.5); }
+    50% { box-shadow: 0 0 40px rgba(241, 196, 15, 0.8); }
+}
+
+.winner {
+    animation: winner-glow 1s infinite;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #3498db;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Game code display */
+.game-code {
+    font-family: 'Courier New', monospace;
+    font-size: 32px;
+    font-weight: bold;
+    letter-spacing: 5px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .playing-card {
+        min-width: 50px;
+        font-size: 18px;
+        padding: 10px 8px;
+    }
+    
+    .trick-area {
+        width: 200px;
+        height: 200px;
+    }
+}
+
+/* Hide Streamlit branding */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
