@@ -8,7 +8,7 @@ Toggle between local (JSON) and cloud (Firestore) modes.
 # =============================================================================
 # Set to "local" for Phase 1 (JSON file database)
 # Set to "firestore" for Phase 2/3 (Google Firestore)
-DATABASE_MODE = "local"
+DATABASE_MODE = "firestore"
 
 # =============================================================================
 # GAME SETTINGS

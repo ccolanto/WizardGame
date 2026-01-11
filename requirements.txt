@@ -1,5 +1,3 @@
-# Phase 1 - Local Development (JSON database)
+# Streamlit Cloud Deployment
 streamlit>=1.28.0
-
-# Phase 2/3 - Firestore (uncomment when ready for cloud deployment)
-# google-cloud-firestore>=2.13.0
+google-cloud-firestore>=2.13.0
