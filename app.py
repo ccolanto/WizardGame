@@ -12,7 +12,7 @@ from game_logic import (
     GameState, GamePhase, Player, Card, Suit,
     create_new_game, join_game, rejoin_game, start_game, deal_cards,
     place_bid, play_card, get_valid_cards, start_next_trick, start_next_round,
-    get_forbidden_bid, choose_trump, leave_game
+    get_forbidden_bid, choose_trump, leave_game, send_chat_message
 )
 from database import get_database
 import config
@@ -201,6 +201,29 @@ def render_waiting_room(game_state: GameState):
     if st.button("🚪 Leave Game"):
         st.session_state.game_id = None
         st.rerun()
+    
+    st.markdown("---")
+    
+    # Chat section
+    st.subheader("💬 Chat")
+    
+    # Display chat messages
+    chat_container = st.container()
+    with chat_container:
+        if game_state.chat_messages:
+            for msg in game_state.chat_messages[-10:]:  # Show last 10 messages
+                st.write(f"**{msg.player_name}** ({msg.timestamp}): {msg.message}")
+        else:
+            st.write("_No messages yet. Say hello!_")
+    
+    # Chat input
+    with st.form(key="chat_form", clear_on_submit=True):
+        chat_input = st.text_input("Message", max_chars=200, label_visibility="collapsed", placeholder="Type a message...")
+        send_btn = st.form_submit_button("Send", use_container_width=True)
+        if send_btn and chat_input:
+            game_state = send_chat_message(game_state, st.session_state.player_id, chat_input)
+            save_game_state(game_state)
+            st.rerun()
     
     # Auto-refresh for waiting players
     with st.spinner("Waiting for players..."):
@@ -524,7 +547,8 @@ def render_playing_phase(game_state: GameState, my_player: Player):
                     player = game_state.players[player_idx]
                     with col:
                         played_card = next((pc.card for pc in game_state.current_trick_cards if pc.player_id == player.player_id), None)
-                        st.write(f"**{player.name[:8]}**")
+                        bid_info = f" (B:{player.bid} W:{player.tricks_won})" if player.bid is not None else ""
+                        st.write(f"**{player.name[:8]}**{bid_info}")
                         if played_card:
                             render_card(played_card)
                         else:

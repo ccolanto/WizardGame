@@ -136,6 +136,21 @@ class PlayedCard:
 
 
 @dataclass
+class ChatMessage:
+    """A chat message in the game."""
+    player_name: str
+    message: str
+    timestamp: str
+    
+    def to_dict(self) -> dict:
+        return {"player_name": self.player_name, "message": self.message, "timestamp": self.timestamp}
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "ChatMessage":
+        return cls(player_name=data["player_name"], message=data["message"], timestamp=data.get("timestamp", ""))
+
+
+@dataclass
 class GameState:
     """Complete state of a game."""
     game_id: str
@@ -154,6 +169,7 @@ class GameState:
     deck: list[Card] = field(default_factory=list)
     last_updated: str = ""
     message: str = ""
+    chat_messages: list[ChatMessage] = field(default_factory=list)
     
     def __post_init__(self):
         if isinstance(self.phase, str):
@@ -208,7 +224,8 @@ class GameState:
             "trick_winner": self.trick_winner,
             "deck": [c.to_dict() for c in self.deck],
             "last_updated": self.last_updated,
-            "message": self.message
+            "message": self.message,
+            "chat_messages": [cm.to_dict() for cm in self.chat_messages]
         }
     
     @classmethod
@@ -232,6 +249,7 @@ class GameState:
         state.lead_suit = Suit(data["lead_suit"]) if data.get("lead_suit") else None
         state.current_trick_cards = [PlayedCard.from_dict(pc) for pc in data.get("current_trick_cards", [])]
         state.deck = [Card.from_dict(c) for c in data.get("deck", [])]
+        state.chat_messages = [ChatMessage.from_dict(cm) for cm in data.get("chat_messages", [])]
         return state
 
 
@@ -614,8 +632,14 @@ def rejoin_game(game_state: GameState, player_id: str, player_name: str) -> tupl
     # This allows rejoining even if the session changed (new browser, refresh, etc.)
     for player in game_state.players:
         if player.name.lower() == player_name.lower():
+            old_player_id = player.player_id
             player.player_id = player_id  # Reassign to new session
             player.is_connected = True
+            
+            # If this player was the host, update host_id too
+            if game_state.host_id == old_player_id:
+                game_state.host_id = player_id
+            
             game_state.message = f"🔄 {player_name} has reconnected!"
             game_state.last_updated = datetime.now().isoformat()
             return game_state, True
@@ -633,6 +657,30 @@ def leave_game(game_state: GameState, player_id: str) -> GameState:
     
     player.is_connected = False
     game_state.message = f"🚪 {player.name} has left the game!"
+    game_state.last_updated = datetime.now().isoformat()
+    
+    return game_state
+
+
+def send_chat_message(game_state: GameState, player_id: str, message: str) -> GameState:
+    """
+    Add a chat message to the game.
+    """
+    player = game_state.get_player(player_id)
+    if not player or not message.strip():
+        return game_state
+    
+    chat_msg = ChatMessage(
+        player_name=player.name,
+        message=message.strip()[:200],  # Limit message length
+        timestamp=datetime.now().strftime("%H:%M")
+    )
+    
+    # Keep last 50 messages max
+    game_state.chat_messages.append(chat_msg)
+    if len(game_state.chat_messages) > 50:
+        game_state.chat_messages = game_state.chat_messages[-50:]
+    
     game_state.last_updated = datetime.now().isoformat()
     
     return game_state
