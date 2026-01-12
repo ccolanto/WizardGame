@@ -12,7 +12,7 @@ from game_logic import (
     GameState, GamePhase, Player, Card, Suit,
     create_new_game, join_game, rejoin_game, start_game, deal_cards,
     place_bid, play_card, get_valid_cards, start_next_trick, start_next_round,
-    get_forbidden_bid
+    get_forbidden_bid, choose_trump
 )
 from database import get_database
 import config
@@ -278,6 +278,69 @@ def render_game_info(game_state: GameState):
         is_dealer = " 🎴" if player.player_id == dealer.player_id else ""
         bid_info = f" (Bid: {player.bid}, Won: {player.tricks_won})" if player.bid is not None else ""
         st.sidebar.write(f"**{player.name}:** {player.score} pts{bid_info}{you}{is_dealer}")
+
+
+def render_choosing_trump(game_state: GameState, my_player: Player):
+    """Render the trump selection UI when a Wizard is flipped."""
+    st.title("🧙 Wizard - Choose Trump Suit!")
+    render_game_info(game_state)
+    
+    dealer = game_state.players[game_state.dealer_index]
+    is_dealer = my_player.player_id == dealer.player_id
+    
+    st.markdown(f"### Round {game_state.current_round}")
+    st.info(f"🧙 **A Wizard was flipped as the trump card!**")
+    
+    # Show the wizard card
+    st.write("**Trump Card:**")
+    render_card(game_state.trump_card)
+    
+    st.markdown("---")
+    
+    # Show player's hand
+    st.subheader("🃏 Your Hand")
+    if my_player.hand:
+        hand_cols = st.columns(len(my_player.hand))
+        for i, card in enumerate(my_player.hand):
+            with hand_cols[i]:
+                render_card(card)
+    else:
+        st.write("No cards in hand")
+    
+    st.markdown("---")
+    
+    if is_dealer:
+        st.success("🎴 **You are the dealer! Choose the trump suit:**")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if st.button(f"♥ Hearts", type="primary", use_container_width=True):
+                game_state = choose_trump(game_state, st.session_state.player_id, Suit.HEARTS)
+                save_game_state(game_state)
+                st.rerun()
+        
+        with col2:
+            if st.button(f"♦ Diamonds", type="primary", use_container_width=True):
+                game_state = choose_trump(game_state, st.session_state.player_id, Suit.DIAMONDS)
+                save_game_state(game_state)
+                st.rerun()
+        
+        with col3:
+            if st.button(f"♣ Clubs", type="primary", use_container_width=True):
+                game_state = choose_trump(game_state, st.session_state.player_id, Suit.CLUBS)
+                save_game_state(game_state)
+                st.rerun()
+        
+        with col4:
+            if st.button(f"♠ Spades", type="primary", use_container_width=True):
+                game_state = choose_trump(game_state, st.session_state.player_id, Suit.SPADES)
+                save_game_state(game_state)
+                st.rerun()
+    else:
+        st.info(f"⏳ Waiting for **{dealer.name}** (dealer) to choose trump suit...")
+        time.sleep(config.REFRESH_INTERVAL)
+        st.rerun()
 
 
 def render_bidding_phase(game_state: GameState, my_player: Player):
@@ -576,6 +639,8 @@ def render_game(game_state: GameState):
     
     if game_state.phase == GamePhase.WAITING_FOR_PLAYERS:
         render_waiting_room(game_state)
+    elif game_state.phase == GamePhase.CHOOSING_TRUMP:
+        render_choosing_trump(game_state, my_player)
     elif game_state.phase == GamePhase.BIDDING:
         render_bidding_phase(game_state, my_player)
     elif game_state.phase == GamePhase.PLAYING:

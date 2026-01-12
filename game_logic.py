@@ -24,6 +24,7 @@ class Suit(Enum):
 class GamePhase(Enum):
     """Current phase of the game."""
     WAITING_FOR_PLAYERS = "waiting_for_players"
+    CHOOSING_TRUMP = "choosing_trump"  # Dealer chooses trump when Wizard is flipped
     BIDDING = "bidding"
     PLAYING = "playing"
     TRICK_COMPLETE = "trick_complete"
@@ -287,8 +288,10 @@ def deal_cards(game_state: GameState) -> GameState:
     if game_state.deck:
         game_state.trump_card = game_state.deck.pop()
         if game_state.trump_card.suit == Suit.WIZARD:
-            # Dealer chooses trump (for simplicity, random choice)
-            game_state.trump_suit = random.choice([Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES])
+            # Dealer must choose trump - set phase and wait
+            game_state.trump_suit = None  # Will be set by dealer
+            game_state.phase = GamePhase.CHOOSING_TRUMP
+            game_state.message = f"Wizard flipped! {game_state.players[game_state.dealer_index].name} must choose trump suit."
         elif game_state.trump_card.suit == Suit.JESTER:
             game_state.trump_suit = None  # No trump this round
         else:
@@ -332,6 +335,26 @@ def get_forbidden_bid(game_state: GameState) -> int:
     if 0 <= forbidden <= tricks_available:
         return forbidden
     return -1
+
+
+def choose_trump(game_state: GameState, player_id: str, suit: Suit) -> GameState:
+    """Dealer chooses trump suit when a Wizard is flipped."""
+    dealer = game_state.players[game_state.dealer_index]
+    
+    # Only dealer can choose
+    if player_id != dealer.player_id:
+        return game_state
+    
+    # Must be in choosing trump phase
+    if game_state.phase != GamePhase.CHOOSING_TRUMP:
+        return game_state
+    
+    game_state.trump_suit = suit
+    game_state.phase = GamePhase.BIDDING
+    game_state.message = f"{dealer.name} chose {suit.value} as trump! {game_state.current_player.name}'s turn to bid."
+    game_state.last_updated = datetime.now().isoformat()
+    
+    return game_state
 
 
 def place_bid(game_state: GameState, player_id: str, bid: int) -> GameState:
@@ -435,30 +458,44 @@ def determine_trick_winner(game_state: GameState) -> str:
     for played in game_state.current_trick_cards:
         card = played.card
         
-        # Skip Jesters
+        # Skip Jesters - they never win
         if card.suit == Suit.JESTER:
             continue
         
+        # First non-jester card becomes initial winner
         if winning_played is None:
             winning_played = played
+            # If lead_suit wasn't set (all jesters before this), set it now
+            if lead_suit is None and card.suit not in (Suit.WIZARD, Suit.JESTER):
+                lead_suit = card.suit
             continue
         
         winning_card = winning_played.card
         
-        # Trump beats non-trump
-        if trump_suit:
-            if card.suit == trump_suit and winning_card.suit != trump_suit:
-                winning_played = played
-                continue
-            if winning_card.suit == trump_suit and card.suit != trump_suit:
-                continue
+        # Determine if current card beats winning card
+        current_is_trump = trump_suit and card.suit == trump_suit
+        winning_is_trump = trump_suit and winning_card.suit == trump_suit
+        current_follows_lead = lead_suit and card.suit == lead_suit
+        winning_follows_lead = lead_suit and winning_card.suit == lead_suit
         
-        # Same suit - higher value wins
-        if card.suit == winning_card.suit:
+        # Trump beats non-trump
+        if current_is_trump and not winning_is_trump:
+            winning_played = played
+        elif winning_is_trump and not current_is_trump:
+            # Current card can't beat trump
+            pass
+        elif current_is_trump and winning_is_trump:
+            # Both trump - higher value wins
             if card.value > winning_card.value:
                 winning_played = played
-        elif card.suit == trump_suit:
+        elif current_follows_lead and winning_follows_lead:
+            # Both follow lead suit - higher value wins
+            if card.value > winning_card.value:
+                winning_played = played
+        elif current_follows_lead and not winning_follows_lead:
+            # Current follows lead, winning doesn't - current wins
             winning_played = played
+        # If neither follows lead and neither is trump, first one wins (no change)
     
     return winning_played.player_id if winning_played else game_state.current_trick_cards[0].player_id
 
