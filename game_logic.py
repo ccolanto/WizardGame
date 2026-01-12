@@ -598,10 +598,10 @@ def join_game(game_state: GameState, player_id: str, player_name: str) -> GameSt
 
 def rejoin_game(game_state: GameState, player_id: str, player_name: str) -> tuple[GameState, bool]:
     """
-    Allow a disconnected player to rejoin an in-progress game.
+    Allow a player to rejoin an in-progress game.
     Returns (game_state, success_flag).
     """
-    # Check if player was already in the game
+    # Check if player was already in the game by player_id
     existing_player = game_state.get_player(player_id)
     if existing_player:
         # Player is already in the game, just mark as connected
@@ -610,12 +610,13 @@ def rejoin_game(game_state: GameState, player_id: str, player_name: str) -> tupl
         game_state.last_updated = datetime.now().isoformat()
         return game_state, True
     
-    # Check if there's a disconnected player with same name to take over
+    # Check if there's a player with same name (case insensitive) to take over
+    # This allows rejoining even if the session changed (new browser, refresh, etc.)
     for player in game_state.players:
-        if player.name.lower() == player_name.lower() and not player.is_connected:
+        if player.name.lower() == player_name.lower():
             player.player_id = player_id  # Reassign to new session
             player.is_connected = True
-            game_state.message = f"{player_name} has reconnected!"
+            game_state.message = f"🔄 {player_name} has reconnected!"
             game_state.last_updated = datetime.now().isoformat()
             return game_state, True
     

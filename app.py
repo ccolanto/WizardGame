@@ -248,6 +248,21 @@ def render_card(card: Card, selectable: bool = False, key: str = None) -> bool:
         return False
 
 
+def render_mobile_header(game_state: GameState):
+    """Render a mobile-friendly header with key game info."""
+    dealer = game_state.players[game_state.dealer_index]
+    trump_display = game_state.trump_suit.value if game_state.trump_suit else "None"
+    
+    # Compact header for mobile
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f"**R{game_state.current_round}** T{game_state.current_trick}/{game_state.cards_this_round}")
+    with col2:
+        st.markdown(f"🃏 **{trump_display}**")
+    with col3:
+        st.markdown(f"🎴 {dealer.name[:8]}")
+
+
 def render_game_info(game_state: GameState):
     """Render game information sidebar."""
     st.sidebar.title("📊 Game Info")
@@ -295,15 +310,42 @@ def render_game_info(game_state: GameState):
         st.rerun()
 
 
+def render_scores_inline(game_state: GameState):
+    """Render scores inline for mobile view."""
+    with st.expander("📊 Scores & Info", expanded=False):
+        dealer = game_state.players[game_state.dealer_index]
+        st.write(f"**Game Code:** {game_state.game_id} | **Dealer:** 🎴 {dealer.name}")
+        
+        sorted_players = sorted(game_state.players, key=lambda p: p.score, reverse=True)
+        for player in sorted_players:
+            you = " 👈" if player.player_id == st.session_state.player_id else ""
+            bid_info = f" (B:{player.bid} W:{player.tricks_won})" if player.bid is not None else ""
+            connected_status = " 📴" if not player.is_connected else ""
+            st.write(f"**{player.name}:** {player.score} pts{bid_info}{you}{connected_status}")
+        
+        if st.button("🚪 Leave Game", key="leave_inline"):
+            updated_state = leave_game(game_state, st.session_state.player_id)
+            save_game_state(updated_state)
+            st.session_state.game_id = None
+            st.rerun()
+
+
 def render_choosing_trump(game_state: GameState, my_player: Player):
     """Render the trump selection UI when a Wizard is flipped."""
-    st.title("🧙 Wizard - Choose Trump Suit!")
-    render_game_info(game_state)
+    st.title("🧙 Choose Trump!")
     
+    # Mobile-friendly header (custom for this phase)
     dealer = game_state.players[game_state.dealer_index]
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"**Round {game_state.current_round}**")
+    with col2:
+        st.markdown(f"🎴 Dealer: **{dealer.name}**")
+    
+    render_scores_inline(game_state)
+    
     is_dealer = my_player.player_id == dealer.player_id
     
-    st.markdown(f"### Round {game_state.current_round}")
     st.info(f"🧙 **A Wizard was flipped as the trump card!**")
     
     # Show the wizard card
@@ -312,13 +354,19 @@ def render_choosing_trump(game_state: GameState, my_player: Player):
     
     st.markdown("---")
     
-    # Show player's hand
+    # Show player's hand - mobile optimized
     st.subheader("🃏 Your Hand")
     if my_player.hand:
-        hand_cols = st.columns(len(my_player.hand))
-        for i, card in enumerate(my_player.hand):
-            with hand_cols[i]:
-                render_card(card)
+        num_cards = len(my_player.hand)
+        cols_per_row = min(4, num_cards)
+        
+        for row_start in range(0, num_cards, cols_per_row):
+            hand_cols = st.columns(cols_per_row)
+            for i, col in enumerate(hand_cols):
+                card_idx = row_start + i
+                if card_idx < num_cards:
+                    with col:
+                        render_card(my_player.hand[card_idx])
     else:
         st.write("No cards in hand")
     
@@ -327,27 +375,29 @@ def render_choosing_trump(game_state: GameState, my_player: Player):
     if is_dealer:
         st.success("🎴 **You are the dealer! Choose the trump suit:**")
         
-        col1, col2, col3, col4 = st.columns(4)
+        # 2x2 grid for mobile
+        row1_col1, row1_col2 = st.columns(2)
+        row2_col1, row2_col2 = st.columns(2)
         
-        with col1:
+        with row1_col1:
             if st.button(f"♥ Hearts", type="primary", use_container_width=True):
                 game_state = choose_trump(game_state, st.session_state.player_id, Suit.HEARTS)
                 save_game_state(game_state)
                 st.rerun()
         
-        with col2:
+        with row1_col2:
             if st.button(f"♦ Diamonds", type="primary", use_container_width=True):
                 game_state = choose_trump(game_state, st.session_state.player_id, Suit.DIAMONDS)
                 save_game_state(game_state)
                 st.rerun()
         
-        with col3:
+        with row2_col1:
             if st.button(f"♣ Clubs", type="primary", use_container_width=True):
                 game_state = choose_trump(game_state, st.session_state.player_id, Suit.CLUBS)
                 save_game_state(game_state)
                 st.rerun()
         
-        with col4:
+        with row2_col2:
             if st.button(f"♠ Spades", type="primary", use_container_width=True):
                 game_state = choose_trump(game_state, st.session_state.player_id, Suit.SPADES)
                 save_game_state(game_state)
@@ -360,13 +410,16 @@ def render_choosing_trump(game_state: GameState, my_player: Player):
 
 def render_bidding_phase(game_state: GameState, my_player: Player):
     """Render the bidding phase UI."""
-    st.title("🧙 Wizard - Bidding Phase")
+    st.title("🧙 Wizard - Bidding")
     render_game_info(game_state)
+    
+    # Mobile-friendly header
+    render_mobile_header(game_state)
+    render_scores_inline(game_state)
     
     # Show round and dealer info prominently
     dealer = game_state.players[game_state.dealer_index]
     dealer_you = " (You)" if dealer.player_id == st.session_state.player_id else ""
-    st.markdown(f"### Round {game_state.current_round} | Dealer: 🎴 {dealer.name}{dealer_you}")
     
     # Show trump prominently at top
     if game_state.trump_card:
@@ -375,24 +428,32 @@ def render_bidding_phase(game_state: GameState, my_player: Player):
             st.write(f"**Trump Card:** {game_state.trump_card.display_name}")
         with col2:
             if game_state.trump_suit:
-                st.markdown(f"### Trump Suit: {game_state.trump_suit.value}")
+                st.markdown(f"**Trump: {game_state.trump_suit.value}**")
             else:
-                st.markdown("### No Trump This Round!")
+                st.markdown("**No Trump This Round!**")
     
     st.markdown("---")
     
-    # Show current bids
+    # Show current bids - mobile optimized
     st.subheader("📝 Bids")
     if game_state.players:
-        cols = st.columns(len(game_state.players))
-        for i, player in enumerate(game_state.players):
-            with cols[i]:
-                you = " (You)" if player.player_id == st.session_state.player_id else ""
-                is_dealer = " 🎴" if i == game_state.dealer_index else ""
-                if player.bid is not None:
-                    st.success(f"{player.name}{you}{is_dealer}: **{player.bid}**")
-                else:
-                    st.warning(f"{player.name}{you}{is_dealer}: ?")
+        # Use 2 columns on mobile for better readability
+        num_players = len(game_state.players)
+        cols_per_row = min(3, num_players)  # Max 3 columns for mobile
+        
+        for row_start in range(0, num_players, cols_per_row):
+            cols = st.columns(cols_per_row)
+            for i, col in enumerate(cols):
+                player_idx = row_start + i
+                if player_idx < num_players:
+                    player = game_state.players[player_idx]
+                    with col:
+                        you = "👈" if player.player_id == st.session_state.player_id else ""
+                        is_dealer_icon = "🎴" if player_idx == game_state.dealer_index else ""
+                        if player.bid is not None:
+                            st.success(f"{player.name[:6]}{you}{is_dealer_icon}: **{player.bid}**")
+                        else:
+                            st.warning(f"{player.name[:6]}{you}{is_dealer_icon}: ?")
     
     st.markdown("---")
     
@@ -436,31 +497,38 @@ def render_bidding_phase(game_state: GameState, my_player: Player):
 
 def render_playing_phase(game_state: GameState, my_player: Player):
     """Render the card playing phase UI."""
-    st.title("🧙 Wizard - Playing Phase")
+    st.title("🧙 Wizard - Play")
     render_game_info(game_state)
     
-    st.markdown(f"### Round {game_state.current_round} - Trick {game_state.current_trick}")
+    # Mobile-friendly header
+    render_mobile_header(game_state)
+    render_scores_inline(game_state)
     
     # Show lead suit if set
-    if game_state.lead_suit:
-        st.write(f"**Lead Suit:** {game_state.lead_suit.value}")
+    lead_info = f"Lead: {game_state.lead_suit.value}" if game_state.lead_suit else "No lead yet"
+    st.write(f"**{lead_info}**")
     
     st.markdown("---")
     
-    # Show cards played this trick
+    # Show cards played this trick - mobile optimized
     st.subheader("🎴 Cards Played")
     if game_state.current_trick_cards:
-        trick_cols = st.columns(len(game_state.players))
-        played_ids = {pc.player_id for pc in game_state.current_trick_cards}
+        num_players = len(game_state.players)
+        cols_per_row = min(3, num_players)
         
-        for i, player in enumerate(game_state.players):
-            with trick_cols[i]:
-                st.write(f"**{player.name}**")
-                played_card = next((pc.card for pc in game_state.current_trick_cards if pc.player_id == player.player_id), None)
-                if played_card:
-                    render_card(played_card)
-                else:
-                    st.write("...")
+        for row_start in range(0, num_players, cols_per_row):
+            cols = st.columns(cols_per_row)
+            for i, col in enumerate(cols):
+                player_idx = row_start + i
+                if player_idx < num_players:
+                    player = game_state.players[player_idx]
+                    with col:
+                        played_card = next((pc.card for pc in game_state.current_trick_cards if pc.player_id == player.player_id), None)
+                        st.write(f"**{player.name[:8]}**")
+                        if played_card:
+                            render_card(played_card)
+                        else:
+                            st.write("...")
     else:
         st.write("No cards played yet")
     
@@ -475,17 +543,25 @@ def render_playing_phase(game_state: GameState, my_player: Player):
         valid_cards = get_valid_cards(my_player, game_state.lead_suit)
         
         if my_player.hand:
-            hand_cols = st.columns(len(my_player.hand))
-            for i, card in enumerate(my_player.hand):
-                with hand_cols[i]:
-                    is_valid = card in valid_cards
-                    btn_type = "primary" if is_valid else "secondary"
-                    disabled = not is_valid
-                    
-                    if st.button(card.display_name, key=f"card_{i}", type=btn_type, disabled=disabled, use_container_width=True):
-                        game_state = play_card(game_state, st.session_state.player_id, card)
-                        save_game_state(game_state)
-                        st.rerun()
+            # Mobile: 3 cards per row max
+            num_cards = len(my_player.hand)
+            cols_per_row = min(4, num_cards)
+            
+            for row_start in range(0, num_cards, cols_per_row):
+                hand_cols = st.columns(cols_per_row)
+                for i, col in enumerate(hand_cols):
+                    card_idx = row_start + i
+                    if card_idx < num_cards:
+                        card = my_player.hand[card_idx]
+                        with col:
+                            is_valid = card in valid_cards
+                            btn_type = "primary" if is_valid else "secondary"
+                            disabled = not is_valid
+                            
+                            if st.button(card.display_name, key=f"card_{card_idx}", type=btn_type, disabled=disabled, use_container_width=True):
+                                game_state = play_card(game_state, st.session_state.player_id, card)
+                                save_game_state(game_state)
+                                st.rerun()
             
             if len(valid_cards) < len(my_player.hand):
                 st.caption("Grayed out cards cannot be played (must follow suit)")
@@ -493,10 +569,17 @@ def render_playing_phase(game_state: GameState, my_player: Player):
             st.write("No cards in hand")
     else:
         if my_player.hand:
-            hand_cols = st.columns(len(my_player.hand))
-            for i, card in enumerate(my_player.hand):
-                with hand_cols[i]:
-                    render_card(card)
+            # Mobile: 4 cards per row max
+            num_cards = len(my_player.hand)
+            cols_per_row = min(4, num_cards)
+            
+            for row_start in range(0, num_cards, cols_per_row):
+                hand_cols = st.columns(cols_per_row)
+                for i, col in enumerate(hand_cols):
+                    card_idx = row_start + i
+                    if card_idx < num_cards:
+                        with col:
+                            render_card(my_player.hand[card_idx])
         else:
             st.write("No cards in hand")
         
@@ -507,24 +590,34 @@ def render_playing_phase(game_state: GameState, my_player: Player):
 
 def render_trick_complete(game_state: GameState, my_player: Player):
     """Render the trick complete screen."""
-    st.title("🧙 Wizard - Trick Complete!")
+    st.title("🏆 Trick Complete!")
     render_game_info(game_state)
+    
+    # Mobile-friendly header
+    render_mobile_header(game_state)
     
     # Show winning card
     winner = game_state.get_player(game_state.trick_winner)
     st.success(f"🏆 **{winner.name}** wins the trick!")
     
-    # Show all cards played
+    # Show all cards played - mobile optimized
     st.subheader("🎴 Cards Played")
-    trick_cols = st.columns(len(game_state.current_trick_cards))
-    for i, played in enumerate(game_state.current_trick_cards):
-        player = game_state.get_player(played.player_id)
-        with trick_cols[i]:
-            is_winner = played.player_id == game_state.trick_winner
-            if is_winner:
-                st.markdown("**👑 WINNER**")
-            st.write(f"**{player.name}**")
-            render_card(played.card)
+    num_cards = len(game_state.current_trick_cards)
+    cols_per_row = min(3, num_cards)
+    
+    for row_start in range(0, num_cards, cols_per_row):
+        trick_cols = st.columns(cols_per_row)
+        for i, col in enumerate(trick_cols):
+            card_idx = row_start + i
+            if card_idx < num_cards:
+                played = game_state.current_trick_cards[card_idx]
+                player = game_state.get_player(played.player_id)
+                with col:
+                    is_winner = played.player_id == game_state.trick_winner
+                    if is_winner:
+                        st.markdown("**👑 WINNER**")
+                    st.write(f"**{player.name[:8]}**")
+                    render_card(played.card)
     
     st.markdown("---")
     
@@ -541,8 +634,10 @@ def render_trick_complete(game_state: GameState, my_player: Player):
 
 def render_round_complete(game_state: GameState, my_player: Player):
     """Render the round complete screen."""
-    st.title("🧙 Wizard - Round Complete!")
-    render_game_info(game_state)
+    st.title("📊 Round Complete!")
+    
+    # Mobile-friendly header
+    render_mobile_header(game_state)
     
     st.success(f"Round {game_state.current_round} is complete!")
     
@@ -588,7 +683,7 @@ def render_round_complete(game_state: GameState, my_player: Player):
 
 def render_game_over(game_state: GameState, my_player: Player):
     """Render the game over screen."""
-    st.title("🧙 Wizard - Game Over!")
+    st.title("🏆 Game Over!")
     
     # Find winner
     winner = max(game_state.players, key=lambda p: p.score)
