@@ -306,6 +306,34 @@ def deal_cards(game_state: GameState) -> GameState:
     return game_state
 
 
+def get_forbidden_bid(game_state: GameState) -> int:
+    """
+    Calculate the forbidden bid for the dealer (screw the dealer rule).
+    Returns -1 if no restriction (not the dealer's turn or not all others have bid).
+    """
+    dealer = game_state.players[game_state.dealer_index]
+    current = game_state.current_player
+    
+    # Only applies to dealer
+    if not current or current.player_id != dealer.player_id:
+        return -1
+    
+    # Check if dealer is last to bid
+    other_bids = [p.bid for p in game_state.players if p.player_id != dealer.player_id]
+    if None in other_bids:
+        return -1  # Not all others have bid yet
+    
+    # Calculate forbidden bid
+    total_bid = sum(other_bids)
+    tricks_available = game_state.cards_this_round
+    forbidden = tricks_available - total_bid
+    
+    # Only forbid if it's a valid bid option (0 to cards_this_round)
+    if 0 <= forbidden <= tricks_available:
+        return forbidden
+    return -1
+
+
 def place_bid(game_state: GameState, player_id: str, bid: int) -> GameState:
     """Place a bid for a player."""
     player = game_state.get_player(player_id)
@@ -529,6 +557,32 @@ def join_game(game_state: GameState, player_id: str, player_name: str) -> GameSt
     game_state.last_updated = datetime.now().isoformat()
     
     return game_state
+
+
+def rejoin_game(game_state: GameState, player_id: str, player_name: str) -> tuple[GameState, bool]:
+    """
+    Allow a disconnected player to rejoin an in-progress game.
+    Returns (game_state, success_flag).
+    """
+    # Check if player was already in the game
+    existing_player = game_state.get_player(player_id)
+    if existing_player:
+        # Player is already in the game, just mark as connected
+        existing_player.is_connected = True
+        existing_player.name = player_name  # Update name in case it changed
+        game_state.last_updated = datetime.now().isoformat()
+        return game_state, True
+    
+    # Check if there's a disconnected player with same name to take over
+    for player in game_state.players:
+        if player.name.lower() == player_name.lower() and not player.is_connected:
+            player.player_id = player_id  # Reassign to new session
+            player.is_connected = True
+            game_state.message = f"{player_name} has reconnected!"
+            game_state.last_updated = datetime.now().isoformat()
+            return game_state, True
+    
+    return game_state, False
 
 
 def start_game(game_state: GameState) -> GameState:

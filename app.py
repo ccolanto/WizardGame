@@ -10,8 +10,9 @@ from datetime import datetime
 
 from game_logic import (
     GameState, GamePhase, Player, Card, Suit,
-    create_new_game, join_game, start_game, deal_cards,
-    place_bid, play_card, get_valid_cards, start_next_trick, start_next_round
+    create_new_game, join_game, rejoin_game, start_game, deal_cards,
+    place_bid, play_card, get_valid_cards, start_next_trick, start_next_round,
+    get_forbidden_bid
 )
 from database import get_database
 import config
@@ -131,15 +132,24 @@ def render_lobby():
             if game_code:
                 game_state = st.session_state.db.load_game(game_code)
                 if game_state:
-                    if game_state.phase != GamePhase.WAITING_FOR_PLAYERS:
-                        st.error("Game has already started!")
-                    elif len(game_state.players) >= 6:
-                        st.error("Game is full!")
+                    if game_state.phase == GamePhase.WAITING_FOR_PLAYERS:
+                        # Normal join for games not started
+                        if len(game_state.players) >= 6:
+                            st.error("Game is full!")
+                        else:
+                            game_state = join_game(game_state, st.session_state.player_id, st.session_state.player_name)
+                            save_game_state(game_state)
+                            st.session_state.game_id = game_code
+                            st.rerun()
                     else:
-                        game_state = join_game(game_state, st.session_state.player_id, st.session_state.player_name)
-                        save_game_state(game_state)
-                        st.session_state.game_id = game_code
-                        st.rerun()
+                        # Try to rejoin an in-progress game
+                        game_state, success = rejoin_game(game_state, st.session_state.player_id, st.session_state.player_name)
+                        if success:
+                            save_game_state(game_state)
+                            st.session_state.game_id = game_code
+                            st.rerun()
+                        else:
+                            st.error("Game in progress. Use the same name to rejoin.")
                 else:
                     st.error("Game not found!")
     
@@ -244,10 +254,19 @@ def render_game_info(game_state: GameState):
     st.sidebar.markdown(f"**Round:** {game_state.current_round} / {game_state.max_rounds}")
     st.sidebar.markdown(f"**Trick:** {game_state.current_trick} / {game_state.cards_this_round}")
     
+    # Show dealer
+    dealer = game_state.players[game_state.dealer_index]
+    dealer_you = " (You)" if dealer.player_id == st.session_state.player_id else ""
+    st.sidebar.markdown(f"**Dealer:** 🎴 {dealer.name}{dealer_you}")
+    
+    # Show trump prominently
     if game_state.trump_suit:
-        st.sidebar.markdown(f"**Trump:** {game_state.trump_suit.value}")
+        trump_display = game_state.trump_suit.value
+        st.sidebar.markdown(f"### 🃏 Trump: {trump_display}")
     elif game_state.trump_card:
-        st.sidebar.markdown("**Trump:** None (Jester)")
+        st.sidebar.markdown("### 🃏 Trump: None")
+    else:
+        st.sidebar.markdown("### 🃏 Trump: None")
     
     st.sidebar.markdown("---")
     st.sidebar.subheader("🏆 Scores")
@@ -256,8 +275,9 @@ def render_game_info(game_state: GameState):
     sorted_players = sorted(game_state.players, key=lambda p: p.score, reverse=True)
     for player in sorted_players:
         you = " 👈" if player.player_id == st.session_state.player_id else ""
+        is_dealer = " 🎴" if player.player_id == dealer.player_id else ""
         bid_info = f" (Bid: {player.bid}, Won: {player.tricks_won})" if player.bid is not None else ""
-        st.sidebar.write(f"**{player.name}:** {player.score} pts{bid_info}{you}")
+        st.sidebar.write(f"**{player.name}:** {player.score} pts{bid_info}{you}{is_dealer}")
 
 
 def render_bidding_phase(game_state: GameState, my_player: Player):
@@ -265,28 +285,36 @@ def render_bidding_phase(game_state: GameState, my_player: Player):
     st.title("🧙 Wizard - Bidding Phase")
     render_game_info(game_state)
     
-    st.markdown(f"### Round {game_state.current_round}")
+    # Show round and dealer info prominently
+    dealer = game_state.players[game_state.dealer_index]
+    dealer_you = " (You)" if dealer.player_id == st.session_state.player_id else ""
+    st.markdown(f"### Round {game_state.current_round} | Dealer: 🎴 {dealer.name}{dealer_you}")
     
-    # Show trump
+    # Show trump prominently at top
     if game_state.trump_card:
-        st.write(f"**Trump Card:** {game_state.trump_card.display_name}")
-        if game_state.trump_suit:
-            st.write(f"**Trump Suit:** {game_state.trump_suit.value}")
-        else:
-            st.write("**No trump this round!**")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**Trump Card:** {game_state.trump_card.display_name}")
+        with col2:
+            if game_state.trump_suit:
+                st.markdown(f"### Trump Suit: {game_state.trump_suit.value}")
+            else:
+                st.markdown("### No Trump This Round!")
     
     st.markdown("---")
     
     # Show current bids
     st.subheader("📝 Bids")
-    cols = st.columns(len(game_state.players))
-    for i, player in enumerate(game_state.players):
-        with cols[i]:
-            you = " (You)" if player.player_id == st.session_state.player_id else ""
-            if player.bid is not None:
-                st.success(f"{player.name}{you}: **{player.bid}**")
-            else:
-                st.warning(f"{player.name}{you}: ?")
+    if game_state.players:
+        cols = st.columns(len(game_state.players))
+        for i, player in enumerate(game_state.players):
+            with cols[i]:
+                you = " (You)" if player.player_id == st.session_state.player_id else ""
+                is_dealer = " 🎴" if i == game_state.dealer_index else ""
+                if player.bid is not None:
+                    st.success(f"{player.name}{you}{is_dealer}: **{player.bid}**")
+                else:
+                    st.warning(f"{player.name}{you}{is_dealer}: ?")
     
     st.markdown("---")
     
@@ -308,7 +336,15 @@ def render_bidding_phase(game_state: GameState, my_player: Player):
     if is_my_turn:
         st.success("🎯 **Your turn to bid!**")
         max_bid = game_state.cards_this_round
-        bid = st.selectbox("Select your bid:", options=list(range(max_bid + 1)), key="bid_select")
+        
+        # Calculate forbidden bid (screw the dealer)
+        forbidden_bid = get_forbidden_bid(game_state)
+        valid_bids = [b for b in range(max_bid + 1) if b != forbidden_bid]
+        
+        if forbidden_bid >= 0:
+            st.warning(f"⚠️ **Screw the Dealer!** You cannot bid **{forbidden_bid}** (would make total bids equal tricks).")
+        
+        bid = st.selectbox("Select your bid:", options=valid_bids, key="bid_select")
         
         if st.button("Submit Bid", type="primary"):
             game_state = place_bid(game_state, st.session_state.player_id, bid)
@@ -446,6 +482,18 @@ def render_round_complete(game_state: GameState, my_player: Player):
     
     st.markdown("---")
     
+    # Show total scoreboard
+    st.subheader("🏆 Total Scores")
+    sorted_players = sorted(game_state.players, key=lambda p: p.score, reverse=True)
+    
+    for i, player in enumerate(sorted_players):
+        you = " 👈" if player.player_id == st.session_state.player_id else ""
+        rank = i + 1
+        medal = "🥇" if rank == 1 else "🥈" if rank == 2 else "🥉" if rank == 3 else f"{rank}."
+        st.write(f"{medal} **{player.name}**: {player.score} points{you}")
+    
+    st.markdown("---")
+    
     # Continue button
     is_host = st.session_state.player_id == game_state.host_id
     
@@ -508,10 +556,23 @@ def render_game(game_state: GameState):
     my_player = game_state.get_player(st.session_state.player_id)
     
     if not my_player:
-        st.error("You are not in this game!")
-        st.session_state.game_id = None
-        st.rerun()
-        return
+        # Try to rejoin with current name
+        if st.session_state.player_name:
+            game_state, success = rejoin_game(game_state, st.session_state.player_id, st.session_state.player_name)
+            if success:
+                save_game_state(game_state)
+                my_player = game_state.get_player(st.session_state.player_id)
+            else:
+                st.error("You are not in this game! Enter the same name to rejoin.")
+                if st.button("Return to Lobby"):
+                    st.session_state.game_id = None
+                    st.rerun()
+                return
+        else:
+            st.error("You are not in this game!")
+            st.session_state.game_id = None
+            st.rerun()
+            return
     
     if game_state.phase == GamePhase.WAITING_FOR_PLAYERS:
         render_waiting_room(game_state)
