@@ -292,10 +292,13 @@ def render_bidding_phase(game_state: GameState, my_player: Player):
     
     # Show my hand
     st.subheader("🃏 Your Hand")
-    hand_cols = st.columns(len(my_player.hand))
-    for i, card in enumerate(my_player.hand):
-        with hand_cols[i]:
-            render_card(card)
+    if my_player.hand:
+        hand_cols = st.columns(len(my_player.hand))
+        for i, card in enumerate(my_player.hand):
+            with hand_cols[i]:
+                render_card(card)
+    else:
+        st.write("No cards in hand")
     
     st.markdown("---")
     
@@ -357,25 +360,31 @@ def render_playing_phase(game_state: GameState, my_player: Player):
         st.success("🎯 **Your turn to play!**")
         valid_cards = get_valid_cards(my_player, game_state.lead_suit)
         
-        hand_cols = st.columns(len(my_player.hand))
-        for i, card in enumerate(my_player.hand):
-            with hand_cols[i]:
-                is_valid = card in valid_cards
-                btn_type = "primary" if is_valid else "secondary"
-                disabled = not is_valid
-                
-                if st.button(card.display_name, key=f"card_{i}", type=btn_type, disabled=disabled, use_container_width=True):
-                    game_state = play_card(game_state, st.session_state.player_id, card)
-                    save_game_state(game_state)
-                    st.rerun()
-        
-        if len(valid_cards) < len(my_player.hand):
-            st.caption("Grayed out cards cannot be played (must follow suit)")
+        if my_player.hand:
+            hand_cols = st.columns(len(my_player.hand))
+            for i, card in enumerate(my_player.hand):
+                with hand_cols[i]:
+                    is_valid = card in valid_cards
+                    btn_type = "primary" if is_valid else "secondary"
+                    disabled = not is_valid
+                    
+                    if st.button(card.display_name, key=f"card_{i}", type=btn_type, disabled=disabled, use_container_width=True):
+                        game_state = play_card(game_state, st.session_state.player_id, card)
+                        save_game_state(game_state)
+                        st.rerun()
+            
+            if len(valid_cards) < len(my_player.hand):
+                st.caption("Grayed out cards cannot be played (must follow suit)")
+        else:
+            st.write("No cards in hand")
     else:
-        hand_cols = st.columns(len(my_player.hand))
-        for i, card in enumerate(my_player.hand):
-            with hand_cols[i]:
-                render_card(card)
+        if my_player.hand:
+            hand_cols = st.columns(len(my_player.hand))
+            for i, card in enumerate(my_player.hand):
+                with hand_cols[i]:
+                    render_card(card)
+        else:
+            st.write("No cards in hand")
         
         st.info(f"⏳ Waiting for **{game_state.current_player.name}** to play...")
         time.sleep(config.REFRESH_INTERVAL)
