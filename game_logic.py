@@ -650,13 +650,26 @@ def rejoin_game(game_state: GameState, player_id: str, player_name: str) -> tupl
 def leave_game(game_state: GameState, player_id: str) -> GameState:
     """
     Mark a player as disconnected/left the game.
+    If the host leaves, pass host duties to another connected player.
     """
     player = game_state.get_player(player_id)
     if not player:
         return game_state
     
     player.is_connected = False
-    game_state.message = f"🚪 {player.name} has left the game!"
+    
+    # If this player was the host, transfer host to another connected player
+    if game_state.host_id == player_id:
+        connected_players = [p for p in game_state.players if p.is_connected and p.player_id != player_id]
+        if connected_players:
+            new_host = connected_players[0]
+            game_state.host_id = new_host.player_id
+            game_state.message = f"🚪 {player.name} has left! 👑 {new_host.name} is now the host!"
+        else:
+            game_state.message = f"🚪 {player.name} has left the game!"
+    else:
+        game_state.message = f"🚪 {player.name} has left the game!"
+    
     game_state.last_updated = datetime.now().isoformat()
     
     return game_state
