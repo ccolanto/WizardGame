@@ -1,6 +1,7 @@
 """
 Configuration settings for the Wizard Card Game.
 Toggle between local (JSON) and cloud (Firestore) modes.
+Version: 1.1.0
 """
 
 # =============================================================================
