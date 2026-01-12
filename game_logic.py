@@ -622,6 +622,21 @@ def rejoin_game(game_state: GameState, player_id: str, player_name: str) -> tupl
     return game_state, False
 
 
+def leave_game(game_state: GameState, player_id: str) -> GameState:
+    """
+    Mark a player as disconnected/left the game.
+    """
+    player = game_state.get_player(player_id)
+    if not player:
+        return game_state
+    
+    player.is_connected = False
+    game_state.message = f"🚪 {player.name} has left the game!"
+    game_state.last_updated = datetime.now().isoformat()
+    
+    return game_state
+
+
 def start_game(game_state: GameState) -> GameState:
     """Start the game (called by host)."""
     if len(game_state.players) < 2:

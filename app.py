@@ -12,7 +12,7 @@ from game_logic import (
     GameState, GamePhase, Player, Card, Suit,
     create_new_game, join_game, rejoin_game, start_game, deal_cards,
     place_bid, play_card, get_valid_cards, start_next_trick, start_next_round,
-    get_forbidden_bid, choose_trump
+    get_forbidden_bid, choose_trump, leave_game
 )
 from database import get_database
 import config
@@ -251,6 +251,7 @@ def render_card(card: Card, selectable: bool = False, key: str = None) -> bool:
 def render_game_info(game_state: GameState):
     """Render game information sidebar."""
     st.sidebar.title("📊 Game Info")
+    st.sidebar.markdown(f"**Game Code:** {game_state.game_id}")
     st.sidebar.markdown(f"**Round:** {game_state.current_round} / {game_state.max_rounds}")
     st.sidebar.markdown(f"**Trick:** {game_state.current_trick} / {game_state.cards_this_round}")
     
@@ -277,7 +278,21 @@ def render_game_info(game_state: GameState):
         you = " 👈" if player.player_id == st.session_state.player_id else ""
         is_dealer = " 🎴" if player.player_id == dealer.player_id else ""
         bid_info = f" (Bid: {player.bid}, Won: {player.tricks_won})" if player.bid is not None else ""
-        st.sidebar.write(f"**{player.name}:** {player.score} pts{bid_info}{you}{is_dealer}")
+        connected_status = "" if player.is_connected else " 📴"
+        st.sidebar.write(f"**{player.name}:** {player.score} pts{bid_info}{you}{is_dealer}{connected_status}")
+    
+    # Show last message/notification
+    if game_state.message:
+        st.sidebar.markdown("---")
+        st.sidebar.info(game_state.message)
+    
+    # Leave game button
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🚪 Leave Game", use_container_width=True):
+        updated_state = leave_game(game_state, st.session_state.player_id)
+        save_game_state(updated_state)
+        st.session_state.game_id = None
+        st.rerun()
 
 
 def render_choosing_trump(game_state: GameState, my_player: Player):
